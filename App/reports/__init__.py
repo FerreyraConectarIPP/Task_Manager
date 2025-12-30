@@ -1,0 +1,1 @@
+from .pdf_report import generate_mini_report_pdf
