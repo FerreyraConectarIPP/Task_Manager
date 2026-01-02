@@ -5,16 +5,7 @@ REM Cambiar al directorio donde está este script
 cd /d "%~dp0"
 
 REM Ejecutar el script con Python
-if exist "%~dp0bot_process.py" (
-    python "%~dp0bot_process.py"
-) else (
-    if exist "%~dp0..\Task_Manager\App_v2\bot_process.py" (
-        python "%~dp0..\Task_Manager\App_v2\bot_process.py"
-    ) else (
-        echo No se encontró bot_process.py en "%~dp0" ni en "..\Task_Manager\App_v2"
-        echo Ajusta la ruta o coloca el script en el mismo directorio que este .bat
-    )
-)
+python bot_process.py
 
 REM Pausa para ver mensajes en consola
 pause
@@ -22,4 +13,6 @@ pause
 
 
 
-@REM Comentarios con rutas absolutas removidos; el .bat usa rutas relativas y fallbacks.
+@REM @echo off
+@REM python "C:\Users\fferreyra\Documents\Projectos 2026\Task_Manager\App_v2\bot_process.py"
+@REM pause
