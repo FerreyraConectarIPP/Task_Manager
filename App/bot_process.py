@@ -6,15 +6,15 @@ import requests
 import time
 
 # Lanzar run.bat en paralelo (no bloqueante)
-bat_process = subprocess.Popen([r"C:/Users/fferreyra/Documents/Projectos 2026/Task_Manager/App_v2/run.bat"])
+# bat_process = subprocess.Popen([r"C:/Users/fferreyra/Documents/Projectos 2026/Task_Manager/App_v2/run.bat"])
 
 # ------------------------------------------------------------------------------------------------------------------- #
 # Descomentar estas lineas para que el path se identifique en el lugar,independientemente de donde este se encuentre. #
 # ------------------------------------------------------------------------------------------------------------------- #
 
-# SCRIPT_DIR = Path(__file__).parent
-# bat_file = SCRIPT_DIR / "run.bat"
-# bat_process = subprocess.Popen([str(bat_file)])
+SCRIPT_DIR = Path(__file__).parent
+bat_file = SCRIPT_DIR / "run.bat"
+bat_process = subprocess.Popen([str(bat_file)])
 
 # ------------------------- #
 # Config cloudflared        #
