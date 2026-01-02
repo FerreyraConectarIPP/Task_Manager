@@ -331,7 +331,7 @@ elif menu == "Registros" and sub_menu == "Actividad Interna":
     show_internal(people_names, people_map)
 
 elif menu == "Reporte PDF":
-    st.header("📄 Mini-Reporte")
+    st.header("📄 Reporte")
     st.markdown("""
     Este reporte contiene:
     - Indicadores generales
@@ -342,9 +342,9 @@ elif menu == "Reporte PDF":
         user = st.session_state.get("user")
         pdf_buffer = generate_mini_report_pdf(generated_by=user, version=version)
         st.download_button(
-            label="📥 Descargar Mini-Reporte",
+            label="📥 Descargar Reporte",
             data=pdf_buffer,
-            file_name=f"mini_reporte_medicion_inteligente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            file_name=f"Reporte_medicion_inteligente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
             mime="application/pdf"
         )
 

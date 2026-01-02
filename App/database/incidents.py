@@ -73,6 +73,37 @@ def update_incident(
     conn.commit()
     return cur.rowcount
 
+# def get_incidents_df():
+#     conn = get_conn()
+#     df = pd.read_sql_query("""
+#         SELECT i.*, 
+#                p.name AS responsible_name
+#         FROM incidents i
+#         LEFT JOIN people p ON i.responsible_id = p.id
+#         ORDER BY i.created_at DESC, i.id DESC
+#     """, conn)
+
+#     # Convertir fechas
+#     for col in ["detected_at", "start_date", "end_date"]:
+#         if col in df.columns:
+#             df[col] = pd.to_datetime(df[col], errors="coerce")
+
+#     # Calcular duración en horas si hay inicio y fin
+#     if "start_date" in df.columns and "start_time" in df.columns:
+#         df["start_dt"] = pd.to_datetime(df["start_date"].astype(str) + " " + df["start_time"].astype(str),
+#                                         errors="coerce")
+#     if "end_date" in df.columns and "end_time" in df.columns:
+#         df["end_dt"] = pd.to_datetime(df["end_date"].astype(str) + " " + df["end_time"].astype(str),
+#                                       errors="coerce")
+
+#     if "start_dt" in df.columns and "end_dt" in df.columns:
+#         df["hours"] = (df["end_dt"] - df["start_dt"]).dt.total_seconds() / 3600
+#     else:
+#         df["hours"] = 0
+
+#     return df
+
+
 def get_incidents_df():
     conn = get_conn()
     df = pd.read_sql_query("""
@@ -83,23 +114,35 @@ def get_incidents_df():
         ORDER BY i.created_at DESC, i.id DESC
     """, conn)
 
-    # Convertir fechas
+    # Convertir fechas principales
     for col in ["detected_at", "start_date", "end_date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Calcular duración en horas si hay inicio y fin
-    if "start_date" in df.columns and "start_time" in df.columns:
-        df["start_dt"] = pd.to_datetime(df["start_date"].astype(str) + " " + df["start_time"].astype(str),
-                                        errors="coerce")
-    if "end_date" in df.columns and "end_time" in df.columns:
-        df["end_dt"] = pd.to_datetime(df["end_date"].astype(str) + " " + df["end_time"].astype(str),
-                                      errors="coerce")
+    # Normalizar tiempos (rellenar nulos con "00:00:00")
+    if "start_time" in df.columns:
+        df["start_time"] = df["start_time"].fillna("00:00:00").astype(str)
+    if "end_time" in df.columns:
+        df["end_time"] = df["end_time"].fillna("00:00:00").astype(str)
 
+    # Calcular datetime inicio/fin con formato explícito
+    if "start_date" in df.columns and "start_time" in df.columns:
+        df["start_dt"] = pd.to_datetime(
+            df["start_date"].dt.strftime("%Y-%m-%d") + " " + df["start_time"],
+            format="%Y-%m-%d %H:%M:%S",
+            errors="coerce"
+        )
+    if "end_date" in df.columns and "end_time" in df.columns:
+        df["end_dt"] = pd.to_datetime(
+            df["end_date"].dt.strftime("%Y-%m-%d") + " " + df["end_time"],
+            format="%Y-%m-%d %H:%M:%S",
+            errors="coerce"
+        )
+
+    # Calcular duración en horas
     if "start_dt" in df.columns and "end_dt" in df.columns:
         df["hours"] = (df["end_dt"] - df["start_dt"]).dt.total_seconds() / 3600
     else:
         df["hours"] = 0
 
     return df
-
