@@ -98,20 +98,18 @@ def show_incidents(people_names, people_map):
                         date.fromisoformat(detected_at.isoformat()).isoformat(),
                         people_map[responsible],
                         status,
+                        subtype,
                         start_date.isoformat(),
                         start_time.isoformat() if start_time else None,
                         end_date.isoformat() if end_date else None,
                         end_time.isoformat() if end_time else None,
                         root_cause,
                         corrective_action,
-                        preventive_action,
-                        # Si tu base de datos soporta subtipo, agrega este argumento en add_incident
-                        # y guarda 'subtype'. Si no, puedes quitar esta línea.
-                        # subtype
+                        preventive_action
                     )
                     st.success(f"✅ Incidente registrado correctamente con ID {new_id}")
 
-    # Listado
+    # ver Listado
     with tab2:
         df = get_incidents_df()
         if df.empty:
@@ -150,27 +148,44 @@ def show_incidents(people_names, people_map):
             if "subtype" in filtered_df.columns:
                 cols.insert(3, "subtype")  # después de category
 
-            st.dataframe(filtered_df[cols])
+            # Mostrar la tabla renombrando 'subtype' a 'Subtipo' para claridad
+            display_df = filtered_df[cols].copy()
+            if "subtype" in display_df.columns:
+                display_df = display_df.rename(columns={"subtype": "Subtipo"})
 
-            # Descargar Excel
+            st.dataframe(display_df)
+
+            # Descargar Excel (renombrar columna para export)
             def to_excel(df_to_save, sheet_name="Incidentes"):
+                df_save = df_to_save.copy()
+                if "subtype" in df_save.columns:
+                    df_save = df_save.rename(columns={"subtype": "Subtipo"})
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                    df_to_save.to_excel(writer, index=False, sheet_name=sheet_name)
+                    df_save.to_excel(writer, index=False, sheet_name=sheet_name)
                 return output.getvalue()
+
+            # Incluir timestamp en nombre de archivo
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            excel_file_name = f"incidentes_filtrados_{timestamp}.xlsx"
 
             st.download_button(
                 label="📥 Descargar incidentes filtrados en Excel",
                 data=to_excel(filtered_df[cols]),
-                file_name="incidentes_filtrados.xlsx",
+                file_name=excel_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Descargar CSV
+            # Descargar CSV (renombrar columna para export)
+            csv_df = filtered_df[cols].copy()
+            if "subtype" in csv_df.columns:
+                csv_df = csv_df.rename(columns={"subtype": "Subtipo"})
+
+            csv_file_name = f"incidentes_filtrados_{timestamp}.csv"
             st.download_button(
                 label="📥 Descargar incidentes filtrados en CSV",
-                data=filtered_df[cols].to_csv(index=False).encode("utf-8"),
-                file_name="incidentes_filtrados.csv",
+                data=csv_df.to_csv(index=False).encode("utf-8"),
+                file_name=csv_file_name,
                 mime="text/csv"
             )
 
@@ -274,6 +289,7 @@ def show_incidents(people_names, people_map):
                         severity=severity,
                         description=description,
                         status=status,
+                        subtype=subtype,
                         start_date=start_date.isoformat() if start_date else None,
                         start_time=start_time.isoformat() if start_time else None,
                         end_date=end_date.isoformat() if end_date else None,
@@ -282,9 +298,7 @@ def show_incidents(people_names, people_map):
                         corrective_action=corrective_action or None,
                         preventive_action=preventive_action or None,
                         detected_at=detected_at.isoformat() if detected_at else None,
-                        responsible_id=people_map[responsible] if responsible else None,
-                        # Si tu función update_incident soporta subtipo, pásalo:
-                        # subtype=subtype
+                        responsible_id=people_map[responsible] if responsible else None
                     )
 
                     if rowcount:

@@ -213,6 +213,7 @@ def init_db():
             id TEXT PRIMARY KEY,
             project TEXT NOT NULL,
             category TEXT NOT NULL,
+            subtype TEXT NOT NULL,
             severity TEXT NOT NULL,
             description TEXT NOT NULL,
             detected_at TEXT NOT NULL,
@@ -232,6 +233,18 @@ def init_db():
             FOREIGN KEY(assigned_by) REFERENCES people(id)
         )
     """)
+
+    # Si la base de datos ya existía sin la columna 'subtype', aplicamos una migración simple
+    # para agregar la columna y dejar un valor por defecto vacío.
+    cur.execute("PRAGMA table_info('incidents')")
+    cols = [r[1] for r in cur.fetchall()]
+    if 'subtype' not in cols:
+        try:
+            cur.execute("ALTER TABLE incidents ADD COLUMN subtype TEXT DEFAULT ''")
+            conn.commit()
+        except Exception as e:
+            # No frenar la inicialización si la migración falla, pero imprimir para debugging
+            print(f"Warning: no se pudo migrar incidents para añadir 'subtype': {e}")
 
     # Internal Activities
     cur.execute("""
