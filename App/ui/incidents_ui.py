@@ -14,7 +14,8 @@ categorias = [
     "Infraestructura / IT",
     "Integración",
     "Operativos / Proceso",
-    "Seguridad"
+    "Seguridad",
+    "Otro"
 ]
 
 subtipos = {
@@ -26,29 +27,49 @@ subtipos = {
     "Infraestructura / IT": ["Servidor", "Red"],
     "Integración": ["Integración"],
     "Operativos / Proceso": ["Operativo"],
-    "Seguridad": ["Seguridad"]
-}
+    "Seguridad": ["Seguridad"],
+    "Otro": ["Otro"]
+} 
 
 
 def show_incidents(people_names, people_map):
     st.header("Gestión de Incidentes")
 
+    # Callbacks para actualizar subtipos cuando cambia la categoría
+    def _on_category_new_change():
+        cat = st.session_state.get("category_new")
+        st.session_state["subtype_new"] = subtipos.get(cat, [None])[0]
+        st.session_state["last_category_new"] = cat
+
+    def _on_category_edit_change():
+        cat = st.session_state.get("category_edit")
+        st.session_state["subtype_edit"] = subtipos.get(cat, [None])[0]
+        st.session_state["last_category_edit"] = cat
+
+
     tab1, tab2, tab3 = st.tabs(["Registrar incidente", "Listado", "Editar incidente"])
 
     # Registrar incidente
     with tab1:
+        # Selección de categoría fuera del formulario para que su cambio provoque re-render inmediato
+        category = st.selectbox("Categoría *", categorias, key="category_new")
+        # Inicializar subtipo si cambia la categoría
+        if st.session_state.get("last_category_new") != category:
+            st.session_state["subtype_new"] = subtipos.get(category, [None])[0]
+            st.session_state["last_category_new"] = category
+
         with st.form("incident_form"):
             incident_id = st.text_input("ID del incidente (alfanumérico) *")
             project = st.text_input("Proyecto asociado *")
 
-            # Categoría y Subtipo dinámicos (claves dependientes de categoría)
-            category = st.selectbox("Categoría *", categorias, key="category_new")
+            # Mostrar la categoría seleccionada y permitir elegir subtipo dentro del formulario
+            st.write(f"Categoría: **{category}**")
             subtype = st.selectbox(
                 "Subtipo *",
-                subtipos[category],
-                key=f"subtype_new_{category}"
+                subtipos.get(category, []),
+                key="subtype_new"
             )
-            
+
             severity = st.radio("Severidad *", ["Baja", "Media", "Alta", "Crítica"], horizontal=True)
             description = st.text_area("Descripción *")
             detected_at = st.date_input("Fecha de detección *", value=date.today())
@@ -162,25 +183,38 @@ def show_incidents(people_names, people_map):
             incident_id = st.selectbox("Selecciona incidente a editar", df["id"].tolist())
             selected = df[df["id"] == incident_id].iloc[0]
 
+            # Selección de categoría fuera del formulario para que su cambio actualice subtipos inmediatamente
+            category = st.selectbox(
+                "Categoría",
+                categorias,
+                index=categorias.index(selected["category"]) if selected["category"] in categorias else 0,
+                key="category_edit"
+            )
+
+            # Inicializar el subtipo al cargar el incidente seleccionado
+            subtype_key = "subtype_edit"
+            if st.session_state.get("last_incident_selected") != incident_id:
+                if "subtype" in selected and selected["subtype"] in subtipos.get(category, []):
+                    st.session_state[subtype_key] = selected["subtype"]
+                else:
+                    st.session_state[subtype_key] = subtipos.get(category, [None])[0]
+                st.session_state["last_incident_selected"] = incident_id
+                st.session_state["last_category_edit"] = category
+
+            # Si el usuario cambia la categoría durante la edición, resetear subtipo
+            if st.session_state.get("last_category_edit") != category:
+                st.session_state[subtype_key] = subtipos.get(category, [None])[0]
+                st.session_state["last_category_edit"] = category
+
             with st.form("edit_incident_form"):
                 project = st.text_input("Proyecto", selected["project"])
-                category = st.selectbox(
-                    "Categoría",
-                    categorias,
-                    index=categorias.index(selected["category"]) if selected["category"] in categorias else 0,
-                    key="category_edit"
-                )
-                subtype_key = f"subtype_edit_{category}"
+                st.write(f"Categoría: **{category}**")
                 subtype = st.selectbox(
                     "Subtipo",
-                    subtipos[category],
-                    index=(
-                        subtipos[category].index(selected["subtype"])
-                        if "subtype" in selected and selected["subtype"] in subtipos[category]
-                        else 0
-                    ),
+                    subtipos.get(category, []),
                     key=subtype_key
                 )
+
                 severity = st.radio(
                     "Severidad",
                     ["Baja", "Media", "Alta", "Crítica"],
