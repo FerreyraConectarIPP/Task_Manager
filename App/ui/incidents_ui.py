@@ -31,7 +31,6 @@ subtipos = {
     "Otro": ["Otro"]
 } 
 
-
 def show_incidents(people_names, people_map):
     st.header("Gestión de Incidentes")
 
