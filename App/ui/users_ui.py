@@ -16,12 +16,13 @@ def show_users():
     with st.form("user_form"):
         username = st.text_input("Nombre de usuario *")
         password = st.text_input("Contraseña *", type="password")
+        email = st.text_input("Email (opcional)")
         role = st.selectbox("Rol", ["user", "Admin"])
         if st.form_submit_button("Agregar usuario"):
             if not username or not password:
                 st.error("El usuario y la contraseña son obligatorios")
             else:
-                add_user(username, password, role)
+                add_user(username, password, role, email=email if email else None)
                 st.success("Usuario agregado correctamente")
                 st.rerun()
 
@@ -49,12 +50,14 @@ def show_users():
             with st.form("edit_user_form"):
                 new_username = st.text_input("Usuario", user_row["username"])
                 new_password = st.text_input("Contraseña (dejar vacío si no cambia)", type="password")
+                new_email = st.text_input("Email (dejar vacío si no cambia)", user_row.get("email", ""))
                 new_role = st.selectbox("Rol", ["user", "Admin"], index=0 if user_row["role"]=="user" else 1)
                 if st.form_submit_button("Guardar cambios"):
                     update_user(user_row["id"],
                                 username=new_username,
                                 password=new_password if new_password else None,
-                                role=new_role)
+                                role=new_role,
+                                email=new_email if new_email else None)
                     st.success("Usuario actualizado")
                     st.rerun()
 

@@ -11,11 +11,90 @@ from ui.internal_ui import show_internal
 from ui.people_ui import show_people
 from reports.pdf_report import generate_mini_report_pdf
 from ui.users_ui import show_users
+from ui.settings_ui import show_settings
 from database.users import authenticate_user, log_user_login, log_user_logout, list_users
 import xlsxwriter 
 
 st.set_page_config(page_title="Task & Incident Manager", layout="centered")
 init_db()
+
+# --- Manejo de tokens de restablecimiento (si el usuario viene con ?reset_token=... en la URL)
+from database.password_reset import get_reset_token, consume_reset_token
+from database.users import update_user, get_user_by_email, get_user_by_username
+from database.settings import get_setting
+from utils.mailer import send_reset_email
+from utils.helpers import get_version
+from datetime import datetime
+
+# Mostrar versión de código (archivo VERSION o commit git). Visible en sidebar y en parte superior.
+version = get_version()
+# Barra lateral (siempre visible)
+# (La versión y el usuario se muestran ahora en la parte inferior de la barra lateral)
+# Resaltar botón de logout en rojo dentro de la sidebar
+st.sidebar.markdown("""
+<style>
+section[data-testid="stSidebar"] .stButton>button{ background-color: #dc2626 !important; color:white !important; border-color:#b91c1c !important;}
+</style>
+""", unsafe_allow_html=True)
+
+# Si la app fue invocada con ?reset_token=..., mostrar formulario para elegir nueva contraseña o crear cuenta
+params = st.query_params
+if params.get("reset_token"):
+    token = params.get("reset_token")[0]
+    token_row = get_reset_token(token)
+    if not token_row:
+        st.error("Token inválido o expirado para restablecer la contraseña.")
+        st.stop()
+    # validar expiración
+    try:
+        expires_at = datetime.fromisoformat(token_row["expires_at"])
+    except Exception:
+        st.error("Token inválido.")
+        st.stop()
+
+    if token_row.get("used"):
+        st.error("Este token ya fue usado.")
+        st.stop()
+
+    if expires_at < datetime.utcnow():
+        st.error("El token ha expirado.")
+        st.stop()
+
+    # Si el token está asociado a un user_id distinto de 0, es un restablecimiento normal
+    if token_row.get("user_id") and token_row.get("user_id") != 0:
+        st.header("Restablecer contraseña")
+        with st.form("reset_password_form"):
+            new_password = st.text_input("Nueva contraseña", type="password")
+            if st.form_submit_button("Actualizar contraseña"):
+                update_user(token_row.get("user_id"), password=new_password)
+                consume_reset_token(token)
+                # limpiar parámetros de query para evitar reenvío accidental
+                st.experimental_set_query_params()
+                st.success("Contraseña actualizada correctamente. Puedes iniciar sesión ahora.")
+                st.stop()
+    else:
+        # Token de invitación / creación de cuenta para email
+        invited_email = token_row.get("email")
+        st.header("Crear cuenta")
+        st.info(f"Crear una cuenta para: {invited_email}")
+        with st.form("create_account_form"):
+            new_username = st.text_input("Nombre de usuario")
+            new_password = st.text_input("Contraseña", type="password")
+            if st.form_submit_button("Crear cuenta"):
+                if not new_username or not new_password:
+                    st.error("Usuario y contraseña son obligatorios")
+                else:
+                    # comprobar si el username ya existe
+                    from database.users import get_user_by_username, add_user
+                    if get_user_by_username(new_username):
+                        st.error("El nombre de usuario ya existe. Elige otro.")
+                    else:
+                        add_user(new_username, new_password, role="user", email=invited_email)
+                        consume_reset_token(token)
+                        st.experimental_set_query_params()
+                        st.success("Cuenta creada correctamente. Ahora puedes iniciar sesión.")
+                        st.stop()
+
 
 if "user" not in st.session_state:
     st.markdown("""
@@ -100,12 +179,41 @@ if "user" not in st.session_state:
             password = st.text_input("Password", type="password")
             submit = st.form_submit_button("Sign in")
 
-    st.markdown("""
-        <div class="forgot">
-            <a href="#">Forgot password? So` boludo no, no la cambio.</a>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Enlace / botón para recuperar contraseña (reemplaza el enlace HTML que no redirige)
+    if st.button("¿Olvidaste tu contraseña?"):
+        st.session_state["show_forgot"] = True
+
+    if st.session_state.get("show_forgot"):
+        st.markdown("### Recuperar contraseña")
+        with st.form("forgot_form"):
+            forgot_email = st.text_input("Introduce tu email registrado")
+            forgot_username = st.text_input("(Opcional) Nombre de usuario (si lo conoces)")
+            if st.form_submit_button("Enviar enlace de restablecimiento"):
+                from database.users import get_user_by_email, get_user_by_username
+                from database.password_reset import create_reset_token
+                from utils.mailer import send_reset_email
+
+                user_row = None
+                if forgot_email:
+                    user_row = get_user_by_email(forgot_email)
+                if not user_row and forgot_username:
+                    user_row = get_user_by_username(forgot_username)
+
+                if not user_row:
+                    st.error("No se encontró un usuario con esos datos. Asegúrate de que el correo esté registrado.")
+                else:
+                    to_email = forgot_email or user_row.get("email")
+                    # obtener APP_BASE_URL desde settings o variable de entorno
+                    base_url = get_setting("APP_BASE_URL") or __import__("os").environ.get("APP_BASE_URL") or "http://localhost:8501"
+                    token = create_reset_token(user_row.get("id"))
+                    reset_link = f"{base_url.rstrip('/')}/?reset_token={token}"
+                    ok, msg = send_reset_email(to_email, user_row.get("username"), reset_link)
+                    if ok:
+                        st.success("Se ha enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.")
+                        st.session_state.pop("show_forgot", None)
+                    else:
+                        st.error(f"No se pudo enviar el correo: {msg}")
+                        st.info("Ponte en contacto con el administrador para que configure SMTP.")
 
     # -------- Auth --------
     if submit:
@@ -147,12 +255,20 @@ if "user" not in st.session_state:
 # --- MENÚ LATERAL ---
 menu_options = ["Dashboard", "Registros", "Reporte PDF"]
 
-# 👇 solo los Admins ven Personas y Usuarios
+# 👇 solo los Admins ven Personas, Usuarios, Ajustes y Correos
 if st.session_state["user"]["role"] == "Admin":
-    menu_options.extend(["Personas", "Usuarios"])
-
-menu_options.append("Logout")
+    menu_options.extend(["Personas", "Usuarios", "Ajustes", "Correos"])
 menu = st.sidebar.selectbox("Navegación", menu_options)
+
+# Botón de logout separado (fuera del selectbox de navegación)
+logout_clicked = st.sidebar.button("Cerrar sesión")
+if logout_clicked:
+    if "session_id" in st.session_state:
+        log_user_logout(st.session_state["session_id"])
+    st.session_state.pop("user", None)
+    st.session_state.pop("session_id", None)
+    st.success("Sesión cerrada correctamente")
+    st.rerun()
 
 # --- SUBMENÚ DE REGISTROS ---
 sub_menu = None
@@ -223,11 +339,12 @@ elif menu == "Reporte PDF":
     - Estado general del área
     """)
     if st.button("Generar y descargar PDF"):
-        pdf_buffer = generate_mini_report_pdf()
+        user = st.session_state.get("user")
+        pdf_buffer = generate_mini_report_pdf(generated_by=user, version=version)
         st.download_button(
             label="📥 Descargar Mini-Reporte",
             data=pdf_buffer,
-            file_name="mini_reporte_medicion_inteligente.pdf",
+            file_name=f"mini_reporte_medicion_inteligente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
             mime="application/pdf"
         )
 
@@ -237,13 +354,25 @@ elif menu == "Personas":  # 👈 solo aparece si es Admin
 elif menu == "Usuarios":  # 👈 solo aparece si es Admin
     show_users()
 
-elif menu == "Logout":
-    if "session_id" in st.session_state:
-        log_user_logout(st.session_state["session_id"])
-    st.session_state.pop("user", None)
-    st.session_state.pop("session_id", None)
-    st.success("Sesión cerrada correctamente")
-    st.stop()
+elif menu == "Ajustes":  # 👈 solo aparece si es Admin
+    show_settings()
+
+elif menu == "Correos":  # 👈 solo aparece si es Admin
+    from ui.emails_ui import show_emails
+    show_emails()
+
+
+
+# Mostrar versión y usuario en la parte inferior de la barra lateral
+if "user" in st.session_state:
+    usr = st.session_state["user"]
+else:
+    usr = {"username": "-", "role": "-"}
+version_text = f"Versión: {version}"
+user_text = f"Usuario: {usr.get('username')} ({usr.get('role')})"
+# Usamos HTML con posicion fixed dentro de la sidebar
+st.sidebar.markdown(f"<div style='position: fixed; left: 16px; bottom: 16px; color: #8b949e; font-size:12px;'>" 
+                    f"{version_text}<br>{user_text}</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 

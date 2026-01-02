@@ -272,9 +272,20 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             role TEXT DEFAULT 'user',
+            email TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Migración segura: si la tabla users existe sin columna 'email', añadirla
+    cur.execute("PRAGMA table_info('users')")
+    users_cols = [r[1] for r in cur.fetchall()]
+    if 'email' not in users_cols:
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN email TEXT")
+            conn.commit()
+        except Exception as e:
+            print(f"Warning: no se pudo migrar users para añadir 'email': {e}")
 
     # User sessions
     cur.execute("""

@@ -111,19 +111,47 @@ def log_user_logout(session_id):
     )
     conn.commit()
 
-def add_user(username, password, role="user"):
+def add_user(username, password, role="user", email=None):
     conn = get_conn()
     conn.execute(
-        "INSERT INTO users (username, password, role) VALUES (?,?,?)",
-        (username, password, role)
+        "INSERT INTO users (username, password, role, email) VALUES (?,?,?,?)",
+        (username, password, role, email)
     )
     conn.commit()
 
 def list_users():
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id, username, role, created_at FROM users ORDER BY username")
+    cur.execute("SELECT id, username, role, email, created_at FROM users ORDER BY username")
     return [dict(r) for r in cur.fetchall()]
+
+def get_user_by_email(email):
+    conn = get_conn()
+    cur = conn.cursor()
+    # Comparación insensible a mayúsculas para emails
+    cur.execute("SELECT * FROM users WHERE LOWER(email)=LOWER(?)", (email,))
+    row = cur.fetchone()
+    if row:
+        return dict(row)
+    # Fallback: buscar en tabla people y mapear por nombre (también case-insensitive)
+    try:
+        cur.execute("SELECT id, name, email FROM people WHERE LOWER(email)=LOWER(?)", (email,))
+        p = cur.fetchone()
+        if p:
+            # intentar obtener usuario cuyo username sea el nombre de la persona
+            cur.execute("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", (p[1],))
+            user_row = cur.fetchone()
+            return dict(user_row) if user_row else None
+    except Exception:
+        pass
+    return None
+
+def get_user_by_username(username):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username=?", (username,))
+    row = cur.fetchone()
+    return dict(row) if row else None
 
 def authenticate_user(username, password):
     conn = get_conn()
@@ -132,7 +160,7 @@ def authenticate_user(username, password):
     row = cur.fetchone()
     return dict(row) if row else None
 
-def update_user(user_id, username=None, password=None, role=None):
+def update_user(user_id, username=None, password=None, role=None, email=None):
     conn = get_conn()
     cur = conn.cursor()
     fields = []
@@ -146,6 +174,9 @@ def update_user(user_id, username=None, password=None, role=None):
     if role:
         fields.append("role=?")
         values.append(role)
+    if email is not None:
+        fields.append("email=?")
+        values.append(email)
     if not fields:
         return 0
     values.append(user_id)
